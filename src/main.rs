@@ -64,30 +64,35 @@ fn main() -> Result<(), PolarsError>{
 
     //on appele la fonction qui transformera le csf file et le passera dans un nouveau dataframe
 
-    let vectorlettre = modif_csv_file(chemin.to_string());
+    let vectorlettre3 = modif_csv_file(chemin.to_string());
+    let vectorlettre = vectorlettre3.0;
     // on convertit le vector de char en en vectore de string pour pouvoir le basculer dans une serie polars
     let string_data: Vec<String> = vectorlettre.iter().collect::<String>().chars().map(|c| c.to_string()).collect();
     //On cree donc un nouvelle serie
     let lettre_serie = Series::new("lettre_serie", string_data);
 
-    let df = sorted.with_column(lettre_serie);
+    let vectorlettreprec = vectorlettre3.1;
+    let string_data: Vec<String> = vectorlettreprec.iter().collect::<String>().chars().map(|c| c.to_string()).collect();
+    let lettreprec_serie = Series::new("lettre_N-1", string_data);
 
+
+    let vectorlettresuiv = vectorlettre3.2;
+    let string_data: Vec<String> = vectorlettresuiv.iter().collect::<String>().chars().map(|c| c.to_string()).collect();
+    let lettresuiv_serie = Series::new("lettre_N+1", string_data);
+
+
+    let df = sorted.with_column(lettre_serie)?.with_column(lettreprec_serie)?.with_column(lettresuiv_serie)?;
+    
 
     println!("df:{:?}", df);
 
-        /* 
-    let _df = sorted
-    .lazy()
-    .with_columns(Series(name="lettre", values=vectorlettre))
-    .collect()?;
-    */
 
     Ok(())
 }
 
 
 //fonction qui modifie le csv file et le retourne
-fn modif_csv_file(pt: String) -> Vec<char>  {
+fn modif_csv_file(pt: String) -> (Vec<char>,Vec<char>,Vec<char>)  {
 
     //on ouvre le fichier - tentont de passer le chemin en argument
 
@@ -101,6 +106,12 @@ fn modif_csv_file(pt: String) -> Vec<char>  {
 
     // on cree unevecteur pour pouvoir recuperer la lettre
     let mut vecletter = Vec::new();
+
+    //et des vecteur pour la precedente et suivante lettre
+    let mut vecletterprev = Vec::new();
+    let mut vecletternext = Vec::new();
+
+
     //et un vecteur pour manipuler les éléments de chaque ligne
     let mut vec = Vec::new();
     //on passe en String la variable temp, utilsé pour controler la sequence, pour etre capable d'utiliser clone car cela ne marche pas sur un str
@@ -131,6 +142,8 @@ fn modif_csv_file(pt: String) -> Vec<char>  {
 
             //on recupere la premiere lettre de la 1ere sequence
             vecletter.push(rr.chars().nth(0).unwrap());
+            // comme premiere lettre alors pas de precedente. on le balise avec f
+            vecletterprev.push('f');
 
             //on incremente le nb de lettre recupere de la sequence.
             countseq += 1;
@@ -152,13 +165,22 @@ fn modif_csv_file(pt: String) -> Vec<char>  {
 
             //si oui alors on navigue sur la lettre suivante et la recupere
             if &temp == &rra{
+
+                vecletterprev.push(vecletter.last().copied().unwrap());
                 vecletter.push(rra.chars().nth(countseq).unwrap());
+                vecletternext.push(rra.chars().nth(countseq).unwrap());
+
                 countseq += 1;
+
 
             //si non on reinitialise ler count de sequence et on recupere la 1er lettre de la nouvelle sequence
             } else {
                 vecletter.push(rra.chars().nth(0).unwrap());
                 countseq = 1;
+                vecletterprev.push('f');
+
+                // comme derniere lettre alors pas de suivante. on le balise avec f
+                vecletternext.push('l');
             }
             //oon rtecupere la nouvelle sequence pour les controles suivants
             temp = rra.to_string().clone();
@@ -166,12 +188,15 @@ fn modif_csv_file(pt: String) -> Vec<char>  {
         //on passe au nouveau record
         count +=1;
     }
+    //on finalise ole decalage en balisant le dernier charactere
+    vecletternext.push('l');
 
     //On print notre vecteur de lettre pour verifer
     //println!("{:?}", vecletter);
-     // et si au lieu d'ajouter la colone dans le csv, on renvoyer le vecteur et on l'ajouter au dataframe. tentons.
+    //println!("{:?}", vecletterprev);
+    //println!("{:?}", vecletternext);
 
-    return vecletter
+    return (vecletter,vecletterprev,vecletternext)
 
     
 
