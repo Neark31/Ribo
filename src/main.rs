@@ -1,5 +1,6 @@
 use polars::prelude::*;
 use std::fs::File;
+
 //use std::io::{self, BufRead, BufReader, Write};
 
 
@@ -62,19 +63,31 @@ fn main() -> Result<(), PolarsError>{
     CsvWriter::new(&mut file).finish(&mut sorted).unwrap();
 
     //on appele la fonction qui transformera le csf file et le passera dans un nouveau dataframe
-    let df = CsvReader::from_path(modif_csv_file(chemin.to_string()))
-    .unwrap()
-    .finish()
-    .unwrap();
 
-    //println!("df:{:?}", df);
+    let vectorlettre = modif_csv_file(chemin.to_string());
+    // on convertit le vector de char en en vectore de string pour pouvoir le basculer dans une serie polars
+    let string_data: Vec<String> = vectorlettre.iter().collect::<String>().chars().map(|c| c.to_string()).collect();
+    //On cree donc un nouvelle serie
+    let lettre_serie = Series::new("lettre_serie", string_data);
+
+    let df = sorted.with_column(lettre_serie);
+
+
+    println!("df:{:?}", df);
+
+        /* 
+    let _df = sorted
+    .lazy()
+    .with_columns(Series(name="lettre", values=vectorlettre))
+    .collect()?;
+    */
 
     Ok(())
 }
 
 
 //fonction qui modifie le csv file et le retourne
-fn modif_csv_file(pt: String) -> String  {
+fn modif_csv_file(pt: String) -> Vec<char>  {
 
     //on ouvre le fichier - tentont de passer le chemin en argument
 
@@ -155,17 +168,11 @@ fn modif_csv_file(pt: String) -> String  {
     }
 
     //On print notre vecteur de lettre pour verifer
-    println!("{:?}", vecletter);
+    //println!("{:?}", vecletter);
+     // et si au lieu d'ajouter la colone dans le csv, on renvoyer le vecteur et on l'ajouter au dataframe. tentons.
 
-   
-   //une fois notre vecteur avec lettre, on voit si on peut l'ajouter a notre fichier csv
+    return vecletter
 
-    //ACTION A ECRIRE
     
-    //on sauvegarde le fichier sous un nouveau nom ou ecrase la variable precedente
-
-    // on renvoie un path sous forme de string avec le nouvau fichier
-    let file_path = "G://Code/Kaggle/Stanford_Ribonanza/extracttemp.csv";    
-    return file_path.to_string()
 
 }
