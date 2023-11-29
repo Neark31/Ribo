@@ -1,64 +1,77 @@
 use polars::prelude::*;
 use std::fs::File;
 
+
 //use std::io::{self, BufRead, BufReader, Write};
 
 
 
 fn main() -> Result<(), PolarsError>{
 
-    // Create a sample DataFrame with 10 fields
-    let df = DataFrame::new(
-        vec![
-            Series::new("Sequence_ID", &[1, 2, 3]),
-            Series::new("Sequence", &["GGGAA", "CGCAA", "GCGAU"]),
-            Series::new("experiment", &["AB", "AB", "CD"]),
-            Series::new("dataset", &["De", "Pe", "RT"]),
-            Series::new("number_field1", &[1, 6, 11]),
-            Series::new("number_field2", &[2, 7, 12]),
-            Series::new("number_field3", &[3, 8, 13]),
-            Series::new("number_field4", &[4, 9, 14]),
-            Series::new("number_field5", &[5, 10, 15]),
-        ]
-    )?;
+    // on recupere le csv string pour notre dataset
+    let file_path = "G://Code/Kaggle/Stanford_Ribonanza/troissample.csv"; 
 
+    let df = CsvReader::from_path(file_path)
+    .unwrap()
+    .finish()
+    .unwrap();
+
+    //println!("df:{:?}", df);
+
+    let id_vars = vec!["ind", "sequence_id", "sequence", "experiment_type", "dataset_name","reads","signal_to_noise","SN_filter"];
  
+    let mut value_vars = Vec::new();
 
-    // Specify the columns you want to keep as-is (text fields)
-    let id_vars = vec!["Sequence_ID","Sequence", "experiment", "dataset"];
+    let input_file = File::open(file_path).expect("Failed to open file");
+    let mut rdr = csv::Reader::from_reader(input_file);
 
-    // Specify the columns you want to melt (number fields) - melt is the method to unpivot
-    let value_vars = vec!["number_field1", "number_field2", "number_field3", "number_field4", "number_field5"];
+    
 
-    // Perform the melt operation to unpivot the DataFrame
+    let headers = rdr.headers().expect("Failed to read headers");
+
+    let mut count = 0;
+
+    let header_vector: Vec<String> = headers.iter().map(|s| s.to_string()).collect();
+
+    
+    for (_index,item) in header_vector.iter().enumerate() {
+
+        if count >7 {
+
+            value_vars.push(item.as_str());
+
+        }
+        
+        count +=1;        
+    }
+    
+
     let melted_df = df.melt(id_vars, value_vars)?;
-    //println!("{:?}", melted_df);
 
-    // pour trier decroissant
-    let _descending = vec![true; 1];
+    //println!("melted_df:{:?}", melted_df);
 
-    // pour trier croissant
-    let ascending = vec![false; 1];
+     // pour trier decroissant
+     let _descending = vec![true; 1];
 
-    // sort the dataset ascending
-    let mut sorted = melted_df
-        .lazy()
-        .sort_by_exprs(
-            vec![
-                col("Sequence_ID"),
-                col("*").exclude(vec!["Sequence_ID"]),
-            ],
-            ascending,
-            false,
-            false,
-        )
-        .collect()?;
-    println!("{:?}", sorted);
+     // pour trier croissant
+     let ascending = vec![false; 1];
+ 
+     // sort the dataset ascending
+     let mut sorted = melted_df
+         .lazy()
+         .sort_by_exprs(
+             vec![
+                 col("sequence_id"),
+                 col("*").exclude(vec!["sequence_id"]),
+             ],
+             ascending,
+             false,
+             false,
+         )
+         .collect()?;
+    // println!("{:?}", sorted);
 
-//il faudra aussi trouver une facon de selectionner seulement les colonnes que l'on veut dans le dataset
-
-    // Save the DataFrame to a CSV file
-    let chemin = "G://Code/Kaggle/Stanford_Ribonanza/extracttemp.csv";
+     let chemin = "G://Code/Kaggle/Stanford_Ribonanza/extractsample.csv";
     let mut file = std::fs::File::create(chemin).unwrap();
     CsvWriter::new(&mut file).finish(&mut sorted).unwrap();
 
@@ -81,11 +94,14 @@ fn main() -> Result<(), PolarsError>{
     let lettresuiv_serie = Series::new("lettre_N+1", string_data);
 
 
-    let df = sorted.with_column(lettre_serie)?.with_column(lettreprec_serie)?.with_column(lettresuiv_serie)?;
+    let mut df = sorted.with_column(lettre_serie)?.with_column(lettreprec_serie)?.with_column(lettresuiv_serie)?;
     
 
     println!("df:{:?}", df);
 
+    let chemin = "G://Code/Kaggle/Stanford_Ribonanza/output.csv";
+    let mut file = std::fs::File::create(chemin).unwrap();
+    CsvWriter::new(&mut file).finish(&mut df).unwrap();
 
     Ok(())
 }
@@ -135,7 +151,7 @@ fn modif_csv_file(pt: String) -> (Vec<char>,Vec<char>,Vec<char>)  {
             let pp = vec[count].clone();
 
             //on convertit l'element du string record en string pour pouvoir le cloner. sinon avec un str on le borrowed et on aurait un probleme de life esperancy
-            let rr = pp[1].to_string();
+            let rr = pp[2].to_string();
 
             // on passe la sequnce en cours dans une variable temporaire en la clonant
             temp = rr.clone();
@@ -158,19 +174,45 @@ fn modif_csv_file(pt: String) -> (Vec<char>,Vec<char>,Vec<char>)  {
             //on accede a la sequnce du record ajouté
             let ppe = &vec[count].clone();
 
-            //on va recuperer la 2eme colonne du vecteur et passer la valeur dans un nouveau vecteur
-            let rra = &ppe[1];
+            //on va recuperer la 3eme colonne du vecteur et passer la valeur dans un nouveau vecteur
+            let rra = &ppe[2];
+
+            let longeur = rra.len();
 
             // on regarde si l'on est dans la meme sequence ou non
 
             //si oui alors on navigue sur la lettre suivante et la recupere
             if &temp == &rra{
 
-                vecletterprev.push(vecletter.last().copied().unwrap());
-                vecletter.push(rra.chars().nth(countseq).unwrap());
-                vecletternext.push(rra.chars().nth(countseq).unwrap());
+                // on s'assure que l'on a pas depasse la longeur de la chaine, sinon on se pousse un n
+                if countseq == longeur {
 
-                countseq += 1;
+                    vecletterprev.push(vecletter.last().copied().unwrap());
+                    vecletter.push('n');
+                    vecletternext.push('n');
+
+                    countseq += 1;
+
+                } else if countseq > longeur{
+
+                    vecletterprev.push('n');
+                    vecletter.push('n');
+                    vecletternext.push('n');
+
+                    countseq += 1;
+
+                } else {
+
+                    vecletterprev.push(vecletter.last().copied().unwrap());
+
+    
+                    vecletter.push(rra.chars().nth(countseq).unwrap());
+                    vecletternext.push(rra.chars().nth(countseq).unwrap());
+    
+                    countseq += 1;
+
+                }
+
 
 
             //si non on reinitialise ler count de sequence et on recupere la 1er lettre de la nouvelle sequence
