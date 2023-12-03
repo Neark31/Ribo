@@ -2,107 +2,76 @@ use polars::prelude::*;
 use std::fs::File;
 
 
+//use std::io::{self, BufRead, BufReader, Write};
+
+
+
 fn main() -> Result<(), PolarsError>{
 
     // on recupere le csv string pour notre dataset
-    let file_path = "G://Code/Kaggle/Stanford_Ribonanza/sequencesample.csv"; 
+    let file_path = "G://Code/Kaggle/Stanford_Ribonanza/troissample.csv"; 
 
-    let mut df = CsvReader::from_path(file_path)
+    let df = CsvReader::from_path(file_path)
     .unwrap()
     .finish()
     .unwrap();
 
+    //println!("df:{:?}", df);
 
-    // on renome la premiere colone crete par l'extract en csv
-    let original_name = "";
-    let new_name = "mainindex";
+    let id_vars = vec!["ind", "sequence_id", "sequence", "experiment_type", "dataset_name","reads","signal_to_noise","SN_filter"];
+ 
+    let mut value_vars = Vec::new();
 
-    df.rename(original_name, new_name);
-    println!("df:{:?}", df);
+    let input_file = File::open(file_path).expect("Failed to open file");
+    let mut rdr = csv::Reader::from_reader(input_file);
 
-    // now we create the position vector and the serie that will be added to the df
-    let vec_letter_index: Vec<i32> = (0..=530).collect();
-    let letter_index = Series::new("lettre_index", vec_letter_index);
+    
 
+    let headers = rdr.headers().expect("Failed to read headers");
 
-    // now lets collect the neededserie into vector
-    let series_a = &df["id_min"];
-    let id_min: Vec<i64> = series_a.i64()?.into_no_null_iter().collect();
+    let mut count = 0;
 
-    let series_b = &df["id_max"];
-    let id_max: Vec<i64> = series_b.i64()?.into_no_null_iter().collect();
+    let header_vector: Vec<String> = headers.iter().map(|s| s.to_string()).collect();
 
+    
+    for (_index,item) in header_vector.iter().enumerate() {
 
-    let series_c = &df["sequence_id"];
-    let sequence_id: Vec<&str> = series_c.utf8()?
-    .into_iter()
-    .filter_map(|opt_str| opt_str) // Filter out the None values
-    .collect();
+        if count >7 {
 
-    let series_d = &df["sequence"];
-    let sequence: Vec<&str> = series_d.utf8()?
-    .into_iter()
-    .filter_map(|opt_str| opt_str) // Filter out the None values
-    .collect();
+            value_vars.push(item.as_str());
 
-
-
-    // on a maintenant 4 vecteur du df et le vecteur index de la longeuru finale. 
-    //on va passer sur chacun des elements
-    let mut count :i64 = 0;
-    //let mut a = 0;
-
-    let mut id_min_dup = Vec::new();
-    let mut id_max_dup = Vec::new();
-    let mut sequence_id_dup = Vec::new();
-    let mut sequence_dup = Vec::new();
-
-
-
-    for (i, _val) in id_max.iter().enumerate(){
-
-        //println!("id_max[i]:{:?}", id_max[i]);
-        while count <= id_max[i]{
-
-            id_min_dup.push(id_min[i]);
-            id_max_dup.push(id_max[i]);
-            sequence_id_dup.push(sequence_id[i]);
-            sequence_dup.push(sequence[i]);
-
-        count +=1;
-        } 
-   
+        }
+        
+        count +=1;        
     }
-
-
-
-    //controle de la longeur de chacun des vecteurs
-    /* 
-    println!("letter_index:{:?}", letter_index.len());
-    println!("id_min:{:?}", id_min_dup.len());
-    println!("id_max:{:?}", id_max_dup.len());
-    println!("sequence_id:{:?}", sequence_id_dup.len());
-    println!("sequence:{:?}", sequence_dup.len());
-    */
-
-
-    //maintenant on recree le df qui passera dans notre fonction
-    let id_min = Series::new("id_min", id_min_dup);
-    let id_max = Series::new("id_max", id_max_dup);
-    let sequence_id = Series::new("sequence_id", sequence_id_dup);
-    let sequence= Series::new("sequence", sequence_dup);
-
-    
-    let mut sorted = DataFrame::new(vec![letter_index, sequence_id, sequence,id_min, id_max])?;
-   // println!("sorted:{:?}", sorted);
-
-
-
-
     
 
+    let melted_df = df.melt(id_vars, value_vars)?;
 
-    let chemin = "G://Code/Kaggle/Stanford_Ribonanza/extractsequence.csv";
+    //println!("melted_df:{:?}", melted_df);
+
+     // pour trier decroissant
+     let _descending = vec![true; 1];
+
+     // pour trier croissant
+     let ascending = vec![false; 1];
+ 
+     // sort the dataset ascending
+     let mut sorted = melted_df
+         .lazy()
+         .sort_by_exprs(
+             vec![
+                 col("sequence_id"),
+                 col("*").exclude(vec!["sequence_id"]),
+             ],
+             ascending,
+             false,
+             false,
+         )
+         .collect()?;
+    // println!("{:?}", sorted);
+
+     let chemin = "G://Code/Kaggle/Stanford_Ribonanza/extractsample.csv";
     let mut file = std::fs::File::create(chemin).unwrap();
     CsvWriter::new(&mut file).finish(&mut sorted).unwrap();
 
@@ -130,7 +99,7 @@ fn main() -> Result<(), PolarsError>{
 
     println!("df:{:?}", df);
 
-    let chemin = "G://Code/Kaggle/Stanford_Ribonanza/output2.csv";
+    let chemin = "G://Code/Kaggle/Stanford_Ribonanza/output.csv";
     let mut file = std::fs::File::create(chemin).unwrap();
     CsvWriter::new(&mut file).finish(&mut df).unwrap();
 
